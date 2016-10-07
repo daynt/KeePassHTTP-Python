@@ -48,8 +48,6 @@ class KeePassHTTP(object):
         self.nonce = self._new_iv()  # generate new nonce before request
         request_data = {'RequestType': 'test-associate'}
         response = self._request(request_data)
-        print(request_data)
-        print(response)
         if response['Success']:
             return self._response_verfier(response)
         return False
@@ -89,8 +87,6 @@ class KeePassHTTP(object):
         }
         if url is not None:
             request_data['Url'] = self._encrypt_data(url)
-        print request_data
-        print url
         response = self._request(request_data)
         self._response_verfier(response)
         logins = []
@@ -206,4 +202,4 @@ if __name__ == '__main__':
             raise Exception('Unable to associate with server')
         print(client.get_logins(args.url))
     elif args.list:
-        print client.get_logins()
+        print(client.get_logins())
