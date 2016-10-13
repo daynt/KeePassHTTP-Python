@@ -234,6 +234,6 @@ if __name__ == '__main__':
     if args.get:
         if not client.is_associate():
             raise Exception('Unable to associate with server')
-        print(client.get_logins(args.url))
+        print(json.dumps(client.get_logins(args.url)))
     elif args.list:
-        print(client.get_logins())
+        print(json.dumps(client.get_logins()))
