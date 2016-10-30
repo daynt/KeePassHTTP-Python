@@ -1,17 +1,23 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 import argparse
 import yaml
 import os
-import urllib2
 import json
 import base64
 from Crypto import Cipher
 from Crypto import Random
 from Crypto.Cipher import AES
+import sys
+
+isPython3 = sys.version_info[0] == 3
+try:
+    # Python3
+    from urllib.request import Request, urlopen
+except ImportError:
+    from urllib2 import Request, urlopen
 
 
 class KeePassHTTP(object):
-
     @classmethod
     def from_filepath(cls, filepath, **kwargs):
         with open(filepath, 'r') as file_object:
@@ -33,8 +39,21 @@ class KeePassHTTP(object):
         self.nonce = None
         self.verifier = None  # it is always the value of Nonce encrypted with Key
 
+    @staticmethod
+    def b64encode(data):
+        if isPython3:
+            result = base64.b64encode(data).decode('ascii')
+        else:
+            result = base64.b64encode(data)
+
+        return result
+
+    @staticmethod
+    def b64decode(data):
+        return base64.b64decode(data)
+
     def _generate_verifier(self):
-        return self._encrypt_data(base64.b64encode(self.nonce))
+        return self._encrypt_data(self.b64encode(self.nonce))
 
     def is_running(self):
         try:
@@ -55,11 +74,13 @@ class KeePassHTTP(object):
     def _encrypt_data(self, data):
         aes = AES.new(self.key, AES.MODE_CBC, self.nonce)
         cipertext = aes.encrypt(self._aes_pad(data))
-        return base64.b64encode(cipertext)
+        return self.b64encode(cipertext)
 
     def _response_verfier(self, response):
-        generate_nonce = self._decrypt_data(base64.b64decode(response['Verifier']),
-                                            base64.b64decode(response['Nonce']))
+        generate_nonce = self._decrypt_data(self.b64decode(response['Verifier']),
+                                            self.b64decode(response['Nonce']))
+        if isPython3:
+            generate_nonce = generate_nonce.decode('ascii')
         if response['Nonce'] != generate_nonce:
             raise Exception('MEN IN MIDDLE ATTACK!')
         return True
@@ -92,20 +113,20 @@ class KeePassHTTP(object):
         logins = []
         for entry in response['Entries']:
             name = self._decrypt_data(
-                base64.b64decode(entry['Name']),
-                base64.b64decode(response['Nonce'])
+                self.b64decode(entry['Name']),
+                self.b64decode(response['Nonce'])
             )
             login = self._decrypt_data(
-                base64.b64decode(entry['Login']),
-                base64.b64decode(response['Nonce'])
+                self.b64decode(entry['Login']),
+                self.b64decode(response['Nonce'])
             )
             password = self._decrypt_data(
-                base64.b64decode(entry['Password']),
-                base64.b64decode(response['Nonce'])
+                self.b64decode(entry['Password']),
+                self.b64decode(response['Nonce'])
             )
             uuid = self._decrypt_data(
-                base64.b64decode(entry['Uuid']),
-                base64.b64decode(response['Nonce'])
+                self.b64decode(entry['Uuid']),
+                self.b64decode(response['Nonce'])
             )
             logins.append({
                 "name": name, "login": login, "password": password,
@@ -118,10 +139,10 @@ class KeePassHTTP(object):
             request_data.update({'Id': self.id})
         if self.key:
             if key_send:
-                request_data.update({'Key': base64.b64encode(self.key)})
+                request_data.update({'Key': self.b64encode(self.key)})
             self.verifier = self._generate_verifier()
             request_data.update({
-                'Nonce': base64.b64encode(self.nonce),
+                'Nonce': self.b64encode(self.nonce),
                 'Verifier': self.verifier
             })
         resp = self._request_json(request_data)
@@ -148,21 +169,30 @@ class KeePassHTTP(object):
     def _request_json(self, data=dict):  # encodes the data in json and sends it to keepass
         data.setdefault("TriggerUnlock", False)
         try:
-            req = urllib2.Request(
-                'http://localhost:' + str(self.port), data=json.dumps(data),
+
+            if isPython3:
+                data = json.dumps(data).encode('ascii')
+            else:
+                data = json.dumps(data)
+
+            req = Request(
+                'http://localhost:' + str(self.port), data=data,
                 headers={
                     "Content-Type": "application/json"
                 },
             )
-            resp = urllib2.urlopen(req)
+            resp = urlopen(req)
             data = resp.read()
-            return data
+
+            if isPython3:
+                return data.decode('ascii')
+            else:
+                return data
         except:
             return False
 
 
 DEFAULT_KEYFILE_PATH = os.path.join(os.path.expanduser('~'), '.kphttpclikey.yml')
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Interact with Keepass database over HTTP')
@@ -181,7 +211,7 @@ if __name__ == '__main__':
         '--get', '-g', action='store_true', default=False, help='Get logins.',
     )
     parser.add_argument(
-         '--list', '-l', action='store_true', default=False, help='List logins.'
+        '--list', '-l', action='store_true', default=False, help='List logins.'
     )
     parser.add_argument(
         '--port', '-p', default=19455, type=int,
@@ -195,7 +225,11 @@ if __name__ == '__main__':
         client.associate()
         client.write_to_filepath(args.keyfile_path)
     else:
-        client = KeePassHTTP.from_filepath(args.keyfile_path)
+        if not os.path.exists(args.keyfile_path):
+            raise Exception('please use -a associate database first')
+            sys.exit(1)
+        else:
+            client = KeePassHTTP.from_filepath(args.keyfile_path)
 
     if args.get:
         if not client.is_associate():
