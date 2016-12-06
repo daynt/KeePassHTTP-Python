@@ -1,13 +1,14 @@
 #!/usr/bin/env python
-import argparse
-import yaml
-import os
-import json
-import base64
 from Crypto import Cipher
 from Crypto import Random
 from Crypto.Cipher import AES
+import argparse
+import base64
+import json
+import os
+import six
 import sys
+import yaml
 
 isPython3 = sys.version_info[0] == 3
 try:
@@ -194,6 +195,18 @@ class KeePassHTTP(object):
 
 DEFAULT_KEYFILE_PATH = os.path.join(os.path.expanduser('~'), '.kphttpclikey.yml')
 
+
+def dump_bytestring(maybe_bs):
+    if isinstance(maybe_bs, six.binary_type):
+        return maybe_bs.decode('utf-8')
+    else:
+        raise TypeError()
+
+def json_dumps(*args, **kwargs):
+    kwargs.setdefault('maybe_bs', dump_bytestring)
+    return json.dumps(*args, **kwargs)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Interact with Keepass database over HTTP')
     parser.add_argument(
@@ -234,6 +247,6 @@ if __name__ == '__main__':
     if args.get:
         if not client.is_associate():
             raise Exception('Unable to associate with server')
-        print(json.dumps(client.get_logins(args.url)))
+        print(json_dumps(client.get_logins(args.url)))
     elif args.list:
-        print(json.dumps(client.get_logins()))
+        print(json_dumps(client.get_logins()))
