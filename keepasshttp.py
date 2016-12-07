@@ -203,7 +203,7 @@ def dump_bytestring(maybe_bs):
         raise TypeError()
 
 def json_dumps(*args, **kwargs):
-    kwargs.setdefault('maybe_bs', dump_bytestring)
+    kwargs.setdefault('default', dump_bytestring)
     return json.dumps(*args, **kwargs)
 
 
